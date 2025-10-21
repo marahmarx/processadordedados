@@ -24,8 +24,8 @@ CONTRATO_PLANNING = {
 }
 
 CONTRATO_NO_PLANNING = {
-    # csv 1: pvd_id, dc_id, vehicle_id, driver_id, date, order_id e outros
-    'tour': ['pvd_id', 'dc_id', 'vehicle_id', 'driver_id', 'date', 'order_id', 'tour_id', 'display_id', 'trip_external_id', 'trip_display_id', 'trip_expected_start_timestamp'],
+    # csv 1: PVD_ids, dc_id, vehicle_id, driver_id, date, order_id e outros
+    'tour': [' PVD_ids', 'dc_id', 'vehicle_id', 'driver_id', 'date', 'order_id', 'tour_id', 'display_id', 'trip_external_id', 'trip_display_id', 'trip_expected_start_timestamp'],
     
     # csv 2: (igual ao planning)
     'driver': ['driver_id', 'vehicle_id', 'document', 'dc_id', 'display_id', 'name', 'phone', 'active', 'logistic_operator_id'],
