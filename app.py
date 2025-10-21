@@ -13,7 +13,7 @@ st.title("Ferramenta de Extração e Geração de CSVs")
 # E usando as colunas-chave que você acabou de definir
 
 CONTRATO_PLANNING = {
-    # csv 1: PVD_id, driver_id
+    # csv 1: PVD_ids, driver_id
     'DEPARA': ['PVD_ids', 'driver_id'],
     
     # csv 2: driver_id, vehicle_id, document, dc_id e outros
