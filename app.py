@@ -14,7 +14,7 @@ st.title("Ferramenta de Extração e Geração de CSVs")
 
 CONTRATO_PLANNING = {
     # csv 1: PVD_id, driver_id
-    'DEPARA': ['PVD_id', 'driver_id'],
+    'DEPARA': ['PVD_ids', 'driver_id'],
     
     # csv 2: driver_id, vehicle_id, document, dc_id e outros
     'driver': ['driver_id', 'vehicle_id', 'document', 'dc_id', 'display_id', 'name', 'phone', 'active', 'logistic_operator_id'],
