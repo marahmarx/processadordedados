@@ -3,198 +3,147 @@ import pandas as pd
 import io
 import zipfile
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Processador de Dados", layout="wide")
-st.title("Ferramenta de Ingestão e Processamento de Dados")
+# --- 1. CONFIGURAÇÃO DA PÁGINA E DOS "CONTRATOS" ---
+st.set_page_config(page_title="Processador de Dados Inteligente", layout="wide")
+st.title("Ferramenta de Extração e Geração de CSVs")
 
-# --- 2. OS "CONTRATOS" DE COLUNAS ---
-# Define as colunas exatas que esperamos para cada tipo de arquivo
-# (Isto é crucial para a validação)
-
+# Estes são os "contratos" dos arquivos FINAIS que queremos gerar.
+# As colunas foram extraídas dos arquivos de exemplo que você enviou.
 CONTRATO_PLANNING = {
-    'poc_motorista': ['poc', 'motorista'],
-    'motorista_veiculo': ['motorista', 'cdd', 'documento', 'telefone', 'carro'],
-    'carro_placa': ['carro', 'placa', 'cdd']
+    'DEPARA': ['PDV_ids', 'driver_id'],
+    'driver': ['driver_id', 'display_id', 'name', 'phone', 'document', 'active', 'logistic_operator_id', 'dc_id'],
+    'vehicle': ['vehicle_id', 'display_id', 'plate', 'type', 'state', 'active', 'dc_id', 'logistic_operator_id']
 }
 
 CONTRATO_NO_PLANNING = {
-    'order_motorista': ['order', 'data', 'veiculo', 'motorista'],
-    'motorista_veiculo': ['motorista', 'cdd', 'documento', 'telefone', 'carro'],
-    'carro_placa': ['carro', 'placa', 'cdd']
+    'tour': ['tour_id', 'date', 'display_id', 'dc_id', 'driver_id', 'vehicle_id', 'order_ids', 'trip_external_id', 'trip_display_id', 'trip_expected_start_timestamp'],
+    'driver': ['driver_id', 'display_id', 'name', 'phone', 'document', 'active', 'logistic_operator_id', 'dc_id'],
+    'vehicle': ['vehicle_id', 'display_id', 'plate', 'type', 'state', 'active', 'dc_id', 'logistic_operator_id']
 }
 
-# --- 3. FUNÇÕES AUXILIARES (O "MOTOR") ---
+# --- 2. INTERFACE - INSTRUÇÕES E SELEÇÃO DE MODO ---
 
-def carregar_arquivos(lista_arquivos_upload):
-    """Lê uma lista de arquivos (CSV ou Excel) e concatena em um único DataFrame."""
-    lista_dfs = []
-    if not lista_arquivos_upload: # Se a lista estiver vazia
-        return None
-        
-    for file in lista_arquivos_upload:
-        try:
-            if file.name.endswith('.csv'):
-                df = pd.read_csv(file)
-            else:
-                df = pd.read_excel(file)
-            lista_dfs.append(df)
-        except Exception as e:
-            st.error(f"Erro ao ler o arquivo '{file.name}': {e}")
-            return None
-            
-    # Concatena todos os DataFrames em um só
-    df_completo = pd.concat(lista_dfs, ignore_index=True)
-    return df_completo
-
-def validar_colunas(df, colunas_esperadas):
-    """Verifica se o DataFrame contém todas as colunas esperadas."""
-    colunas_arquivo = df.columns
-    colunas_faltando = [col for col in colunas_esperadas if col not in colunas_arquivo]
+# Usamos um "expander" para não poluir a tela.
+with st.expander("Clique aqui para ver as colunas necessárias em seus arquivos de upload"):
+    st.info("Seu(s) arquivo(s) de upload devem conter, em algum lugar, todas as colunas listadas abaixo para o modo escolhido.")
     
-    if colunas_faltando:
-        return False, colunas_faltando
-    return True, None
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Modo Planning")
+        st.markdown("**Para o CSV `DEPARA`:**")
+        st.code(CONTRATO_PLANNING['DEPARA'])
+        st.markdown("**Para o CSV `driver`:**")
+        st.code(CONTRATO_PLANNING['driver'])
+        st.markdown("**Para o CSV `vehicle`:**")
+        st.code(CONTRATO_PLANNING['vehicle'])
 
-# --- 4. INTERFACE DO USUÁRIO (O "SITE") ---
+    with col2:
+        st.subheader("Modo No Planning")
+        st.markdown("**Para o CSV `tour`:**")
+        st.code(CONTRATO_NO_PLANNING['tour'])
+        st.markdown("**Para o CSV `driver`:**")
+        st.code(CONTRATO_NO_PLANNING['driver'])
+        st.markdown("**Para o CSV `vehicle`:**")
+        st.code(CONTRATO_NO_PLANNING['vehicle'])
 
-# O botão de seleção principal
 modo = st.radio(
-    "Selecione o modo de operação:",
+    "1. Selecione o modo de operação:",
     ("Planning", "No Planning"),
     key='modo_operacao',
     horizontal=True
 )
 
-# Dicionário para guardar os DataFrames processados
-dataframes_processados = {}
-validacao_passou = True
-contrato_atual = None
+st.divider()
+
+# --- 3. INTERFACE - UPLOAD ÚNICO E INTELIGENTE ---
+
+st.subheader("2. Faça o upload dos seus arquivos de dados")
+st.write("Você pode enviar um ou mais arquivos (Excel ou CSV). O sistema irá juntar e extrair as informações necessárias.")
+
+uploaded_files = st.file_uploader(
+    "Arraste e solte ou clique para selecionar os arquivos",
+    accept_multiple_files=True,
+    key='file_uploader'
+)
 
 st.divider()
 
-if modo == "Planning":
-    st.header("Modo: Planning")
-    contrato_atual = CONTRATO_PLANNING
+# --- 4. LÓGICA DE PROCESSAMENTO ---
+
+def carregar_e_concatenar(lista_arquivos):
+    """Lê uma lista de arquivos e junta todos em um único DataFrame."""
+    if not lista_arquivos:
+        return None
     
-    # Criamos 3 colunas para os 3 uploaders
-    col1, col2, col3 = st.columns(3)
+    lista_dfs = []
+    for file in lista_arquivos:
+        try:
+            # Tenta ler como Excel, se não conseguir, tenta como CSV
+            try:
+                df = pd.read_excel(file)
+            except Exception:
+                file.seek(0) # Volta ao início do arquivo para a nova leitura
+                df = pd.read_csv(file)
+            lista_dfs.append(df)
+        except Exception as e:
+            st.error(f"Não foi possível ler o arquivo '{file.name}'. Verifique o formato. Erro: {e}")
+            return None
     
-    with col1:
-        files_tipo_1 = st.file_uploader(
-            "1. Arquivos de POC e Motorista",
-            accept_multiple_files=True,
-            key='planning_1'
-        )
-    with col2:
-        files_tipo_2 = st.file_uploader(
-            "2. Arquivos de Motorista e Veículo",
-            accept_multiple_files=True,
-            key='planning_2'
-        )
-    with col3:
-        files_tipo_3 = st.file_uploader(
-            "3. Arquivos de Carro e Placa",
-            accept_multiple_files=True,
-            key='planning_3'
-        )
-    
-    # Mapeia os uploaders para os contratos
-    uploads_info = {
-        'poc_motorista': (files_tipo_1, contrato_atual['poc_motorista']),
-        'motorista_veiculo': (files_tipo_2, contrato_atual['motorista_veiculo']),
-        'carro_placa': (files_tipo_3, contrato_atual['carro_placa'])
-    }
+    # Concatena todos os dataframes, ignorando o índice para não ter duplicatas
+    df_completo = pd.concat(lista_dfs, ignore_index=True)
+    return df_completo
 
-else: # Modo "No Planning"
-    st.header("Modo: No Planning")
-    contrato_atual = CONTRATO_NO_PLANNING
-
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        files_tipo_1 = st.file_uploader(
-            "1. Arquivos de Ordem e Motorista",
-            accept_multiple_files=True,
-            key='noplanning_1'
-        )
-    with col2:
-        files_tipo_2 = st.file_uploader(
-            "2. Arquivos de Motorista e Veículo",
-            accept_multiple_files=True,
-            key='noplanning_2'
-        )
-    with col3:
-        files_tipo_3 = st.file_uploader(
-            "3. Arquivos de Carro e Placa",
-            accept_multiple_files=True,
-            key='noplanning_3'
-        )
-
-    # Mapeia os uploaders para os contratos
-    uploads_info = {
-        'order_motorista': (files_tipo_1, contrato_atual['order_motorista']),
-        'motorista_veiculo': (files_tipo_2, contrato_atual['motorista_veiculo']),
-        'carro_placa': (files_tipo_3, contrato_atual['carro_placa'])
-    }
-
-st.divider()
-
-# Verifica se todos os 3 uploaders têm pelo menos um arquivo
-todos_uploads_prontos = all(len(info[0]) > 0 for info in uploads_info.values())
-
-if not todos_uploads_prontos:
-    st.info("Por favor, faça o upload de pelo menos um arquivo em cada uma das 3 seções acima para continuar.")
-else:
-    # Se todos os uploads estiverem prontos, mostra o botão de processar
-    if st.button("Processar e Gerar Arquivos", type="primary", use_container_width=True):
+if uploaded_files:
+    if st.button("Processar e Gerar CSVs", type="primary", use_container_width=True):
         
-        with st.spinner("Lendo, validando e processando arquivos..."):
+        with st.spinner("Lendo e consolidando seus arquivos..."):
+            df_consolidado = carregar_e_concatenar(uploaded_files)
+
+        if df_consolidado is not None:
+            st.success(f"Arquivos lidos com sucesso! Encontramos um total de {len(df_consolidado)} linhas.")
             
-            # Itera sobre cada TIPO de upload
-            for nome_tipo, (lista_arquivos, colunas_esperadas) in uploads_info.items():
-                
-                # 1. Carrega e Concatena
-                df_completo = carregar_arquivos(lista_arquivos)
-                if df_completo is None:
-                    st.error(f"Erro ao carregar arquivos para '{nome_tipo}'.")
-                    validacao_passou = False
-                    continue # Pula para o próximo tipo
-                
-                # 2. Valida
-                is_valid, colunas_faltando = validar_colunas(df_completo, colunas_esperadas)
-                if not is_valid:
-                    st.error(f"Validação falhou para '{nome_tipo}'. Colunas faltando: {colunas_faltando}")
-                    validacao_passou = False
-                    continue # Pula para o próximo tipo
-                
-                # 3. Limpa (remove duplicadas) e armazena
-                df_limpo = df_completo[colunas_esperadas].drop_duplicates()
-                dataframes_processados[nome_tipo] = df_limpo
-                
-                st.write(f"✔️ Arquivos de '{nome_tipo}' lidos e validados ({len(df_limpo)} linhas únicas).")
+            contrato_atual = CONTRATO_PLANNING if modo == "Planning" else CONTRATO_NO_PLANNING
+            dataframes_finais = {}
+            processamento_ok = True
 
-            # --- GERAÇÃO DO ZIP DE SAÍDA ---
-            if validacao_passou:
-                st.success("Todos os arquivos foram processados com sucesso!")
+            with st.spinner("Extraindo e montando os CSVs finais..."):
+                # Itera sobre cada CSV que queremos criar (ex: 'DEPARA', 'driver', 'vehicle')
+                for nome_csv, colunas_necessarias in contrato_atual.items():
+                    
+                    # Verifica se todas as colunas necessárias existem na base consolidada
+                    colunas_disponiveis = df_consolidado.columns
+                    colunas_faltando = [col for col in colunas_necessarias if col not in colunas_disponiveis]
+                    
+                    if colunas_faltando:
+                        st.error(f"**Erro ao gerar `{nome_csv}.csv`:** As seguintes colunas não foram encontradas nos seus arquivos: `{colunas_faltando}`")
+                        processamento_ok = False
+                    else:
+                        # Se todas as colunas existem, extrai e limpa
+                        df_extraido = df_consolidado[colunas_necessarias].copy()
+                        df_extraido.drop_duplicates(inplace=True)
+                        dataframes_finais[nome_csv] = df_extraido
+                        st.write(f"✔️ `{nome_csv}.csv` montado com sucesso ({len(df_extraido)} linhas únicas).")
 
+            if processamento_ok:
+                st.success("Todos os CSVs foram gerados com sucesso!")
+
+                # Gera o arquivo ZIP para download
                 try:
                     memory_zip = io.BytesIO()
                     with zipfile.ZipFile(memory_zip, 'w') as zf:
-                        
-                        # Escreve os DataFrames processados no ZIP
-                        for nome_tipo, df in dataframes_processados.items():
-                            zf.writestr(f"{nome_tipo}_consolidado.csv", df.to_csv(index=False))
+                        for nome, df in dataframes_finais.items():
+                            zf.writestr(f"{nome}.csv", df.to_csv(index=False, encoding='utf-8'))
                     
                     memory_zip.seek(0)
                     
                     st.download_button(
-                        label="Baixar CSVs Processados (ZIP)",
+                        label="Baixar todos os CSVs (ZIP)",
                         data=memory_zip,
-                        file_name=f"arquivos_{modo.lower()}_processados.zip",
+                        file_name=f"CSVs_{modo.lower()}_{pd.Timestamp.now().strftime('%Y%m%d')}.zip",
                         mime="application/zip",
                         use_container_width=True
                     )
                 except Exception as e:
                     st.error(f"Erro ao gerar o arquivo ZIP: {e}")
             else:
-                st.error("Processamento falhou. Corrija os arquivos com erro e tente novamente.")
+                st.warning("O processamento falhou. Ajuste seus arquivos de upload para incluir as colunas faltantes e tente novamente.")
