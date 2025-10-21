@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import zipfile
-from fuzzywuzzy import process # Importa a biblioteca de sugestão
+from thefuzz import process 
 
 # --- 1. CONFIGURAÇÃO (Contratos 100% em minúsculas) ---
 st.set_page_config(page_title="Processador de Dados Inteligente", layout="wide")
