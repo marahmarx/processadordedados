@@ -165,7 +165,7 @@ if not st.session_state.mapeamento_confirmado:
                         st.session_state.mapeamento_final = mapeamento_invertido
                         st.session_state.mapeamento_confirmado = True
                         st.success("Mapeamento confirmado! Processando...")
-                        st.experimental_rerun() # Roda o script de novo
+                        st.rerun() # Roda o script de novo
 
 # Etapa 3: Processamento e Download (só aparece se o mapeamento foi confirmado)
 if st.session_state.mapeamento_confirmado:
@@ -223,4 +223,4 @@ if st.session_state.mapeamento_confirmado:
         st.session_state.mapeamento_confirmado = False
         st.session_state.mapeamento_final = {}
         st.session_state.df_consolidado = None
-        st.experimental_rerun()
+        st.rerun()
