@@ -2,12 +2,14 @@ import streamlit as st
 import pandas as pd
 import io
 import zipfile
-import difflib # <-- Esta é a nova biblioteca, que já vem com o Python!
+import difflib # Biblioteca nativa do Python (sem erros de instalação)
 
 # --- 1. CONFIGURAÇÃO (Contratos 100% em minúsculas) ---
 st.set_page_config(page_title="Processador de Dados Inteligente", layout="wide")
 st.title("Ferramenta de Mapeamento e Geração de CSVs")
 
+# --- CONTRATOS FINAIS ---
+# Estes são os nomes "ideais" para os quais vamos mapear
 CONTRATO_PLANNING = {
     'depara': ['pvd_id', 'driver_id'],
     'driver': ['driver_id', 'vehicle_id', 'document', 'dc_id', 'display_id', 'name', 'phone', 'active', 'logistic_operator_id'],
@@ -19,6 +21,21 @@ CONTRATO_NO_PLANNING = {
     'driver': ['driver_id', 'vehicle_id', 'document', 'dc_id', 'display_id', 'name', 'phone', 'active', 'logistic_operator_id'],
     'vehicle': ['vehicle_id', 'plate', 'dc_id', 'display_id', 'type', 'state', 'active', 'logistic_operator_id']
 }
+
+# --- DICIONÁRIO DE SINÔNIMOS (A NOVA INTELIGÊNCIA) ---
+# Você pode adicionar mais sinônimos (em minúsculo) aqui
+DICIONARIO_SINONIMOS = {
+    'pvd_id': ['pdv', 'poc', 'id_poc', 'pontodevenda', 'id_pvd', 'pdv_ids'],
+    'driver_id': ['id_driver', 'id_motorista', 'motorista'],
+    'vehicle_id': ['id_vehicle', 'id_veiculo', 'carro'],
+    'dc_id': ['id_dc', 'cd', 'cdd'],
+    'plate': ['placa'],
+    'document': ['documento', 'cpf'],
+    'date': ['data'],
+    'order_id': ['id_order', 'id_pedido', 'pedido', 'order_ids']
+    # Adicione mais sinônimos conforme precisar
+}
+
 
 # --- 2. FUNÇÕES DO "MOTOR" ---
 
@@ -33,38 +50,46 @@ def carregar_e_concatenar(lista_arquivos):
                 df = pd.read_excel(file)
             elif file_name.endswith('.csv'):
                 file.seek(0)
-                df = pd.read_csv(file)
+                df = pd.read_csv(file, low_memory=False)
                 if df.shape[1] == 1:
                     file.seek(0)
-                    df = pd.read_csv(file, sep=';')
+                    df = pd.read_csv(file, sep=';', low_memory=False)
             
             if df is not None:
+                # Padroniza todas as colunas: minúsculas e sem espaços
                 df.columns = df.columns.str.lower().str.strip()
                 lista_dfs.append(df)
             else:
                 st.error(f"Não foi possível processar o arquivo '{file_name}'.")
                 return None
         except Exception as e:
-            st.error(f"Não foi possível ler o arquivo '{file_name}'. Erro: {e}")
+            st.error(f"Não foi possível ler o arquivo '{file_name}'. Verifique o formato. Erro: {e}")
             return None
     
     if not lista_dfs:
         return None
         
+    # Junta todos os dataframes
     return pd.concat(lista_dfs, ignore_index=True)
 
 def encontrar_melhor_palpite(coluna_alvo, colunas_do_usuario):
-    """Usa difflib (nativo do Python) para encontrar a coluna mais parecida."""
-    # Tenta correspondência exata primeiro (já que tudo está em minúsculas)
+    """Encontra a coluna mais parecida usando Sinônimos e Similaridade."""
+    
+    # Nível 1: Correspondência Exata
     if coluna_alvo in colunas_do_usuario:
         return coluna_alvo
     
-    # Se não, usa difflib para encontrar a mais próxima
-    # Pede o 1º melhor palpite (n=1) com 70% de similaridade (cutoff=0.7)
-    palpites = difflib.get_close_matches(coluna_alvo, colunas_do_usuario, n=1, cutoff=0.7)
+    # Nível 2: Correspondência por Sinônimo (ex: 'poc' -> 'pvd_id')
+    if coluna_alvo in DICIONARIO_SINONIMOS:
+        for sinonimo in DICIONARIO_SINONIMOS[coluna_alvo]:
+            if sinonimo in colunas_do_usuario:
+                return sinonimo # Encontrou um sinônimo!
     
-    if palpites: # Se a lista de palpites não estiver vazia
-        return palpites[0] # Retorna o primeiro e melhor palpite
+    # Nível 3: Correspondência por Similaridade (ex: 'driverid' vs 'driver_id')
+    palpites = difflib.get_close_matches(coluna_alvo, colunas_do_usuario, n=1, cutoff=0.7)
+    if palpites:
+        return palpites[0]
+        
     return None # Não sugere nada se não for parecido
 
 # --- 3. INICIALIZAÇÃO DO ESTADO DA SESSÃO ---
@@ -77,31 +102,37 @@ if 'df_consolidado' not in st.session_state:
 
 # --- 4. INTERFACE PRINCIPAL ---
 
-# Etapa 1: Seleção de Modo
+# Etapa 1: Instruções e Seleção de Modo
+with st.expander("Clique aqui para ver os nomes de colunas IDEAIS que o sistema procura"):
+    # (Esta parte agora é apenas informativa, já que o sistema vai adivinhar)
+    st.info("Não se preocupe se suas colunas tiverem nomes diferentes (ex: 'POC', 'placa'). O sistema tentará adivinhar.")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Modo Planning")
+        for nome_csv, colunas in CONTRATO_PLANNING.items():
+            st.code(f"{nome_csv}: {colunas}")
+    with col2:
+        st.subheader("Modo No Planning")
+        for nome_csv, colunas in CONTRATO_NO_PLANNING.items():
+            st.code(f"{nome_csv}: {colunas}")
+
 modo = st.radio(
     "1. Selecione o modo de operação:",
     ("Planning", "No Planning"),
     key='modo_operacao',
     horizontal=True,
-    disabled=st.session_state.mapeamento_confirmado # Desativa se já mapeou
+    disabled=st.session_state.mapeamento_confirmado
 )
 
-# Define o contrato com base no modo
 contrato_atual = CONTRATO_PLANNING if modo == "Planning" else CONTRATO_NO_PLANNING
-
-# Pega a lista de TODAS as colunas únicas que precisamos para este modo
-colunas_alvo_necessarias = set()
-for col_list in contrato_atual.values():
-    colunas_alvo_necessarias.update(col_list)
-colunas_alvo_necessarias = sorted(list(colunas_alvo_necessarias))
+colunas_alvo_necessarias = sorted(list(set(col for cols in contrato_atual.values() for col in cols)))
 
 # Etapa 2: Upload (só aparece se o mapeamento não foi feito)
 if not st.session_state.mapeamento_confirmado:
     st.subheader("2. Faça o upload dos seus arquivos de dados")
-    st.write("Envie um ou mais arquivos (Excel ou CSV). O sistema tentará adivinhar suas colunas.")
     
     uploaded_files = st.file_uploader(
-        "Arraste e solte ou clique para selecionar os arquivos",
+        "Envie um ou mais arquivos (Excel ou CSV).",
         accept_multiple_files=True,
         key='file_uploader',
         type=['csv', 'xlsx']
@@ -119,36 +150,28 @@ if not st.session_state.mapeamento_confirmado:
             colunas_do_usuario = list(st.session_state.df_consolidado.columns)
             mapeamento_sugerido = {}
             
-            # Cria o formulário de mapeamento
             with st.form(key="form_mapeamento"):
                 st.write("Para cada **Coluna que o Sistema Precisa**, selecione a **Coluna do Seu Arquivo** correspondente.")
                 
-                # Para cada coluna que o sistema precisa...
                 for col_alvo in colunas_alvo_necessarias:
-                    # ...encontra o melhor palpite nas colunas do usuário
                     palpite = encontrar_melhor_palpite(col_alvo, colunas_do_usuario)
-                    
-                    # Opções para o dropdown: "Ignorar" + todas as colunas do usuário
                     opcoes = ["-- Ignorar --"] + colunas_do_usuario
                     
-                    # Acha o índice do palpite na lista de opções para o selectbox
-                    if palpite is not None:
-                        indice = opcoes.index(palpite)
-                    else:
-                        indice = 0 # Default para "-- Ignorar --"
-
-                    # Mostra o dropdown
+                    try:
+                        indice = opcoes.index(palpite) if palpite is not None else 0
+                    except ValueError:
+                        indice = 0
+                    
                     mapeamento_sugerido[col_alvo] = st.selectbox(
                         f"Coluna que o Sistema Precisa: **{col_alvo}**",
                         options=opcoes,
-                        index=indice
+                        index=indice,
+                        help=f"Procurando por '{col_alvo}'. Sugerimos '{palpite}' baseado em nome ou sinônimos."
                     )
                 
-                # Botão de submissão do formulário
                 submitted = st.form_submit_button("Confirmar Mapeamento e Processar")
                 
                 if submitted:
-                    # Processa o mapeamento
                     mapeamento_invertido = {}
                     colunas_faltando = []
                     
@@ -156,7 +179,6 @@ if not st.session_state.mapeamento_confirmado:
                         if col_usuario == "-- Ignorar --":
                             colunas_faltando.append(col_alvo)
                         else:
-                            # O formato final é {col_usuario: col_alvo} para o .rename()
                             mapeamento_invertido[col_usuario] = col_alvo
                             
                     if colunas_faltando:
@@ -165,42 +187,36 @@ if not st.session_state.mapeamento_confirmado:
                         st.session_state.mapeamento_final = mapeamento_invertido
                         st.session_state.mapeamento_confirmado = True
                         st.success("Mapeamento confirmado! Processando...")
-                        st.rerun() # Roda o script de novo
+                        st.rerun() # Roda o script de novo (função correta)
 
 # Etapa 3: Processamento e Download (só aparece se o mapeamento foi confirmado)
 if st.session_state.mapeamento_confirmado:
     
     st.subheader("3. Processamento e Download")
     
+    # Renomeia as colunas do usuário para as colunas do sistema
     df_mapeado = st.session_state.df_consolidado.rename(
         columns=st.session_state.mapeamento_final
     )
-    
-    st.write("Colunas renomeadas e prontas para processar:")
-    st.code(list(df_mapeado.columns))
     
     dataframes_finais = {}
     processamento_ok = True
     
     with st.spinner("Montando os CSVs finais..."):
-        # Itera sobre cada CSV que queremos criar
         for nome_csv, colunas_necessarias in contrato_atual.items():
             
-            # Checa se temos todas as colunas após o mapeamento
             if not all(col in df_mapeado.columns for col in colunas_necessarias):
-                st.error(f"Erro ao gerar {nome_csv}.csv. Mesmo após o mapeamento, nem todas as colunas foram encontradas.")
+                col_faltantes_final = [c for c in colunas_necessarias if c not in df_mapeado.columns]
+                st.error(f"Erro ao gerar {nome_csv}.csv. Colunas não encontradas após o mapeamento: {col_faltantes_final}")
                 processamento_ok = False
             else:
-                # Extrai as colunas
                 df_extraido = df_mapeado[colunas_necessarias].copy()
                 df_extraido.dropna(how='all', inplace=True)
                 df_extraido.drop_duplicates(inplace=True)
-                
                 dataframes_finais[nome_csv] = df_extraido
                 st.write(f"✔️ `{nome_csv}.csv` montado com sucesso ({len(df_extraido)} linhas únicas).")
 
     if processamento_ok:
-        # Gera o ZIP
         try:
             memory_zip = io.BytesIO()
             with zipfile.ZipFile(memory_zip, 'w') as zf:
@@ -223,4 +239,4 @@ if st.session_state.mapeamento_confirmado:
         st.session_state.mapeamento_confirmado = False
         st.session_state.mapeamento_final = {}
         st.session_state.df_consolidado = None
-        st.rerun()
+        st.rerun() # Função correta
