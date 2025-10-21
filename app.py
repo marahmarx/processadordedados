@@ -10,13 +10,13 @@ st.title("Ferramenta de Extração e Geração de CSVs")
 # --- CONTRATOS 100% EM MINÚSCULAS ---
 # O sistema irá procurar por estes nomes (ignora maiúsculas/minúsculas)
 CONTRATO_PLANNING = {
-    'depara': ['PDV_id', 'driver_id'],
+    'depara': ['PDV_ids', 'driver_id'],
     'driver': ['driver_id', 'vehicle_id', 'document', 'dc_id', 'display_id', 'name', 'phone', 'active', 'logistic_operator_id'],
     'vehicle': ['vehicle_id', 'plate', 'dc_id', 'display_id', 'type', 'state', 'active', 'logistic_operator_id']
 }
 
 CONTRATO_NO_PLANNING = {
-    'tour': ['pvd_id', 'dc_id', 'vehicle_id', 'driver_id', 'date', 'order_id', 'tour_id', 'display_id', 'trip_external_id', 'trip_display_id', 'trip_expected_start_timestamp'],
+    'tour': ['PVD_ids', 'dc_id', 'vehicle_id', 'driver_id', 'date', 'order_id', 'tour_id', 'display_id', 'trip_external_id', 'trip_display_id', 'trip_expected_start_timestamp'],
     'driver': ['driver_id', 'vehicle_id', 'document', 'dc_id', 'display_id', 'name', 'phone', 'active', 'logistic_operator_id'],
     'vehicle': ['vehicle_id', 'plate', 'dc_id', 'display_id', 'type', 'state', 'active', 'logistic_operator_id']
 }
