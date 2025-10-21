@@ -10,7 +10,7 @@ st.title("Ferramenta de Extração e Geração de CSVs")
 # --- CONTRATOS 100% EM MINÚSCULAS ---
 # O sistema irá procurar por estes nomes (ignora maiúsculas/minúsculas)
 CONTRATO_PLANNING = {
-    'depara': ['pvd_id', 'driver_id'],
+    'depara': ['PDV_id', 'driver_id'],
     'driver': ['driver_id', 'vehicle_id', 'document', 'dc_id', 'display_id', 'name', 'phone', 'active', 'logistic_operator_id'],
     'vehicle': ['vehicle_id', 'plate', 'dc_id', 'display_id', 'type', 'state', 'active', 'logistic_operator_id']
 }
