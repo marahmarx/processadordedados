@@ -22,18 +22,44 @@ CONTRATO_NO_PLANNING = {
     'vehicle': ['vehicle_id', 'plate', 'dc_id', 'display_id', 'type', 'state', 'active', 'logistic_operator_id']
 }
 
-# --- O "CÉREBRO" DA IA (DICIONÁRIO DE SINÔNIMOS) ---
-# 'pdv_ids' é a chave principal. 'pvd_id' (com V) é apenas um sinônimo.
+# --- O "CÉREBRO" DA IA (DICIONÁRIO DE SINÔNIMOS MULTILÍNGUE) ---
 DICIONARIO_SINONIMOS = {
-    'pdv_ids': ['pdv', 'poc', 'id_poc', 'pontodevenda', 'id_pvd', 'pvd_id'],
-    'driver_id': ['id_driver', 'id_motorista', 'motorista'],
-    'vehicle_id': ['id_vehicle', 'id_veiculo', 'carro', 'veiculo'],
-    'dc_id': ['id_dc', 'cd', 'cdd'],
-    'plate': ['placa'],
-    'document': ['documento', 'cpf'],
-    'date': ['data'],
-    'order_id': ['id_order', 'id_pedido', 'pedido', 'order_ids']
-    # Para "treinar", adicione mais sinônimos aqui
+    # Chave do Sistema: [Sinônimos em PT, EN, ES]
+    'pdv_ids': ['pdv', 'poc', 'id_poc', 'pontodevenda', 'id_pvd', 'pvd_id', # PT
+                'pos_id', 'store_id', 'customer_id', # EN (Point of Sale)
+                'id_pdv', 'id_cliente', 'cliente_id'], # ES (Punto de Venta)
+    
+    'driver_id': ['id_driver', 'id_motorista', 'motorista', # PT
+                  'driver', # EN
+                  'conductor', 'id_conductor'], # ES
+    
+    'vehicle_id': ['id_vehicle', 'id_veiculo', 'carro', 'veiculo', # PT
+                   'vehicle', 'truck_id', # EN
+                   'id_vehiculo', 'vehiculo'], # ES
+    
+    'dc_id': ['id_dc', 'cd', 'cdd', # PT
+              'dc', 'distribution_center_id', 'depot_id', # EN
+              'id_cd'], # ES (Centro de Distribución)
+    
+    'plate': ['placa', # PT
+              'license_plate', # EN
+              'matricula', 'patente'], # ES
+    
+    'document': ['documento', 'cpf', # PT
+                 'dni'], # ES
+    
+    'date': ['data', # PT
+             'fecha'], # ES
+    
+    'order_id': ['id_order', 'id_pedido', 'pedido', 'order_ids', # PT
+                 'order', # EN
+                 'id_orden', 'orden', 'nro_pedido'], # ES
+    
+    'name': ['nome', # PT
+             'nombre'], # ES
+    
+    'phone': ['telefone', # PT
+              'telefono'] # ES
 }
 
 # --- CAMPOS OBRIGATÓRIOS ---
@@ -101,7 +127,7 @@ if 'df_consolidado' not in st.session_state:
 
 # Etapa 1: Instruções e Seleção de Modo
 with st.expander("Clique aqui para ver os nomes de colunas IDEAIS que o sistema procura"):
-    st.info("Não se preocupe se suas colunas tiverem nomes diferentes. A IA tentará adivinhar.")
+    st.info("Não se preocupe se suas colunas tiverem nomes diferentes (ex: 'POC', 'placa', 'fecha'). A IA tentará adivinhar.")
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Modo Planning")
