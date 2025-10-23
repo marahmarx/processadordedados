@@ -22,7 +22,7 @@ CONTRATO_NO_PLANNING = {
     'vehicle': ['vehicle_id', 'plate', 'dc_id', 'display_id', 'type', 'state', 'active', 'logistic_operator_id']
 }
 
-# --- DICIONÁRIO DE SINÔNIMOS (A "INTELIGÊNCIA") ---
+# --- O "CÉREBRO" DA IA (DICIONÁRIO DE SINÔNIMOS) ---
 # 'pdv_ids' é a chave principal. 'pvd_id' (com V) é apenas um sinônimo.
 DICIONARIO_SINONIMOS = {
     'pdv_ids': ['pdv', 'poc', 'id_poc', 'pontodevenda', 'id_pvd', 'pvd_id'],
@@ -33,7 +33,7 @@ DICIONARIO_SINONIMOS = {
     'document': ['documento', 'cpf'],
     'date': ['data'],
     'order_id': ['id_order', 'id_pedido', 'pedido', 'order_ids']
-    # Adicione mais sinônimos conforme precisar
+    # Para "treinar", adicione mais sinônimos aqui
 }
 
 # --- CAMPOS OBRIGATÓRIOS ---
@@ -74,16 +74,16 @@ def carregar_e_concatenar(lista_arquivos):
     return pd.concat(lista_dfs, ignore_index=True)
 
 def encontrar_melhor_palpite(coluna_alvo, colunas_do_usuario):
-    """Encontra a coluna mais parecida usando Sinônimos e Similaridade."""
+    """A "IA" que adivinha a coluna."""
     # Nível 1: Correspondência Exata
     if coluna_alvo in colunas_do_usuario:
         return coluna_alvo
-    # Nível 2: Correspondência por Sinônimo
+    # Nível 2: Correspondência por Sinônimo (Consulta o "Cérebro")
     if coluna_alvo in DICIONARIO_SINONIMOS:
         for sinonimo in DICIONARIO_SINONIMOS[coluna_alvo]:
             if sinonimo in colunas_do_usuario:
                 return sinonimo # Encontrou um sinônimo!
-    # Nível 3: Correspondência por Similaridade
+    # Nível 3: Correspondência por Similaridade (Erros de digitação)
     palpites = difflib.get_close_matches(coluna_alvo, colunas_do_usuario, n=1, cutoff=0.7)
     if palpites:
         return palpites[0]
@@ -101,7 +101,7 @@ if 'df_consolidado' not in st.session_state:
 
 # Etapa 1: Instruções e Seleção de Modo
 with st.expander("Clique aqui para ver os nomes de colunas IDEAIS que o sistema procura"):
-    st.info("Não se preocupe se suas colunas tiverem nomes diferentes (ex: 'POC', 'placa'). O sistema tentará adivinhar.")
+    st.info("Não se preocupe se suas colunas tiverem nomes diferentes. A IA tentará adivinhar.")
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Modo Planning")
@@ -117,68 +117,55 @@ modo = st.radio(
     ("Planning", "No Planning"),
     key='modo_operacao',
     horizontal=True,
-    disabled=(st.session_state.etapa != "upload") # Desativa se já passou da etapa
+    disabled=(st.session_state.etapa != "upload")
 )
 contrato_atual = CONTRATO_PLANNING if modo == "Planning" else CONTRATO_NO_PLANNING
 colunas_alvo_necessarias = sorted(list(set(col for cols in contrato_atual.values() for col in cols)))
 
 st.divider()
 
-# Etapa 2: Upload (só aparece se o mapeamento não foi feito)
+# Etapa 2: Upload
 if st.session_state.etapa == "upload":
     st.subheader("2. Faça o upload dos seus arquivos de dados")
-    
     uploaded_files = st.file_uploader(
         "Envie um ou mais arquivos (Excel ou CSV).",
         accept_multiple_files=True,
         key='file_uploader',
         type=['csv', 'xlsx']
     )
-    
     if uploaded_files:
         with st.spinner("Lendo e consolidando seus arquivos..."):
             st.session_state.df_consolidado = carregar_e_concatenar(uploaded_files)
-        
         if st.session_state.df_consolidado is not None:
             st.session_state.etapa = "mapear" # Avança para a próxima etapa
-            st.rerun() # Roda o script de novo para mostrar a etapa de mapeamento
+            st.rerun()
 
-# Etapa 3: Mapeamento (só aparece depois do upload)
+# Etapa 3: Mapeamento (Supervisão da "IA")
 if st.session_state.etapa == "mapear":
-    st.subheader("2. Confirme o Mapeamento")
+    st.subheader("2. Confirme o Mapeamento da IA")
     st.write("O sistema adivinhou suas colunas. Por favor, revise e confirme.")
     
     colunas_do_usuario = list(st.session_state.df_consolidado.columns)
     mapeamento_sugerido = {}
     
     with st.form(key="form_mapeamento"):
-        st.write("Para cada **Coluna que o Sistema Precisa**, selecione a **Coluna do Seu Arquivo** correspondente.")
-        
         for col_alvo in colunas_alvo_necessarias:
             palpite = encontrar_melhor_palpite(col_alvo, colunas_do_usuario)
             opcoes = ["-- Ignorar --"] + colunas_do_usuario
-            
             try:
                 indice = opcoes.index(palpite) if palpite is not None else 0
             except ValueError:
                 indice = 0
-            
             label = f"Coluna do Sistema: **{col_alvo}**"
             if col_alvo in CAMPOS_OBRIGATORIOS:
                 label += " (Obrigatório)"
-            
-            mapeamento_sugerido[col_alvo] = st.selectbox(
-                label,
-                options=opcoes,
-                index=indice
-            )
+            mapeamento_sugerido[col_alvo] = st.selectbox(label, options=opcoes, index=indice)
         
         submitted = st.form_submit_button("Confirmar Mapeamento e Processar")
         
         if submitted:
             mapeamento_invertido = {}
             colunas_obrigatorias_faltando = []
-            
             for col_alvo, col_usuario in mapeamento_sugerido.items():
                 if col_usuario == "-- Ignorar --":
                     if col_alvo in CAMPOS_OBRIGATORIOS:
@@ -190,25 +177,19 @@ if st.session_state.etapa == "mapear":
                 st.error(f"Mapeamento incompleto! Você precisa mapear os campos obrigatórios: {colunas_obrigatorias_faltando}")
             else:
                 st.session_state.mapeamento_final = mapeamento_invertido
-                st.session_state.etapa = "processar" # Avança para a etapa final
+                st.session_state.etapa = "processar"
                 st.success("Mapeamento confirmado! Processando...")
                 st.rerun()
 
 # Etapa 4: Processamento e Download
 if st.session_state.etapa == "processar":
-    
     st.subheader("3. Processamento e Download")
-    
-    df_mapeado = st.session_state.df_consolidado.rename(
-        columns=st.session_state.mapeamento_final
-    )
-    
+    df_mapeado = st.session_state.df_consolidado.rename(columns=st.session_state.mapeamento_final)
     dataframes_finais = {}
     processamento_ok = True
     
     with st.spinner("Montando os CSVs finais..."):
         for nome_csv, colunas_necessarias in contrato_atual.items():
-            
             if not all(col in df_mapeado.columns for col in colunas_necessarias):
                 col_faltantes_final = [c for c in colunas_necessarias if c not in df_mapeado.columns]
                 st.error(f"Erro ao gerar {nome_csv}.csv: Colunas não encontradas: {col_faltantes_final}")
@@ -238,7 +219,6 @@ if st.session_state.etapa == "processar":
         except Exception as e:
             st.error(f"Erro ao gerar o arquivo ZIP: {e}")
 
-    # Botão para recomeçar o processo
     if st.button("Recomeçar / Enviar novos arquivos"):
         st.session_state.etapa = "upload"
         st.session_state.mapeamento_final = {}
